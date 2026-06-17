@@ -1,0 +1,38 @@
+import mongoose from "mongoose";
+
+const sessionSchema= new mongoose.Schema({
+    userId:{
+        type:mongoose.Schema.Types.ObjectId ,
+        ref:"users" ,
+        required: [true , "User is required"]
+    } ,
+
+    refreshTokenHash:{
+        type:String , 
+        required:[true ,"Refresh token is required"]
+    } ,
+
+    ip:{
+        type:String ,
+        required : [true , "IP is required"]
+   } ,
+
+   userAgent:{
+    type:String , 
+    required: [true , "User agent is requried"]
+   } ,
+
+
+   revoke:{
+    type:Boolean ,
+    default:false
+   } ,
+  
+} ,
+ {
+timestamps:true
+ } ,);
+
+const sessionModel= mongoose.model("session" ,sessionSchema);
+
+export default sessionModel;
