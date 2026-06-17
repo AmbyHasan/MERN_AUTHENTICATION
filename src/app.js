@@ -2,6 +2,12 @@ import express from "express";
 import morgan from "morgan"  //it is basically a logger ,which tells apke server par kab konsi request ayi thi ,what was the endpoint ,what was the method etc
 import authRouter from "./routes/auth.routes.js";
 import cookieParser from "cookie-parser";
+import dns from "dns";
+
+dns.setServers([
+    '1.1.1.1' ,
+    '8.8.8.1'
+])
 
 const app=express();
 

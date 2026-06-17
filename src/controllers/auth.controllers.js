@@ -36,7 +36,7 @@ export async function register(req ,res){
     }
 
     //now we will hash the password
-    const hashedPassword = await bcrypt.hash(password, 10);
+       const  hashedPassword = crypto.createHash("sha256").update(password).digest("hex");
 
     const user = await userModel.create({
         username ,
@@ -349,8 +349,8 @@ export async function logoutAll(req  ,res){
 
     //user ke sare sesssions dhoondho and revoke ko false mark krdo
     await sessionModel.updateMany({
-         user:decoded_id , 
-         revoked:false ,
+         userId:decoded.id , 
+         revoke:false ,
          } ,
          {
             revoke :true 
