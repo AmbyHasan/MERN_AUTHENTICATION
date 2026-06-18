@@ -2,7 +2,7 @@
 
 
 import app from "./src/app.js";
-import connectdb from "./config/db.js";
+import connectdb from "./src/config/db.js";
 
 connectdb();
 

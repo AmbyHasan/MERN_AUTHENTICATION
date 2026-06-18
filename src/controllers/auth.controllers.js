@@ -1,10 +1,14 @@
 import bcrypt from "bcrypt";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import config from "../../config/config.js";
-import userModel from "../../models/user.model.js";
+import config from "../config/config.js";
+import userModel from "../models/user.model.js";
 import cookieParser from "cookie-parser";
-import sessionModel from "../../models/session.model.js";
+import sessionModel from "../models/session.model.js";
+import { sendEmail } from "../../services/email_service.js";
+import { generateOtp , getOtpHtml } from "../utils/utils.js";
+import otpModel from "../models/otp.model.js";
+
 
 
 
@@ -41,54 +45,34 @@ export async function register(req ,res){
     const user = await userModel.create({
         username ,
         email ,
-        password:hashedPassword
+        password:hashedPassword,
+        verified:false
     });
 
-    //now the user has been registered and we will create accesstoken and refreshtoken
+    //since the user has been registered with us  so we will generate the otp
 
-    const refreshToken = jwt.sign({
-        id : user._id ,
-    }, config.JWT_SECRET ,
-    {
-        expiresIn:"6d"
-    })  //it will be stored in cookies
+    const otp= generateOtp();
+    const html= getOtpHtml(otp);
 
-    const refreshTokenHash = crypto
-        .createHash("sha256")
-        .update(refreshToken)
-        .digest("hex");
+    const otpHash= crypto.createHash("sha256").update(otp).digest("hex");
+   await otpModel.create({
+    email ,
+    user:user._id , 
+    otpHash,
+    expiresAt: new Date(Date.now() + 5 * 60 * 1000) // 5 minutes
+   })
 
-    res.cookie("refreshToken" , refreshToken,{
-        httpOnly:true ,   //client side pe jo JS run hogi wo kabhi bhi cookies ke andar ke data ko access nhi kr payegi
-        secure: process.env.NODE_ENV === "production",
-        sameSite:"strict" ,
-        maxAge: 6*24*60*60*1000 // 6 days
-    });
+       await sendEmail(email, "OTP Verification", `Your OTP code is ${otp}`, html)
 
-    const session = await sessionModel.create({
-
-        userId: user._id ,
-        refreshTokenHash ,
-        ip: req.ip ,
-        userAgent: req.headers["user-agent"]
-
-    })
-
-    const accessToken = jwt.sign({
-        id : user._id ,
-        session: session._id ,
-    }, config.JWT_SECRET ,
-    {
-        expiresIn:"15m"
-    }) //it will be stored in memory
+       //WE WONT GENERATE THE ACCESS TOKEN UNLESS THE USER GETS VERIFIED
+    
 
     res.status(201).json({
         message: "User registered successfully" ,
         user:{
             username:user.username ,
             email:user.email
-        } ,
-        accessToken
+        } 
     })
 
 }
@@ -101,6 +85,12 @@ export async function login(req , res){
     if(!user){
         return res.status(401).json({
             message : "Invalid email or password"
+        })
+    }
+
+    if(!user.verified){
+        return res.status(401).json({
+            message : "user is not verified"
         })
     }
 
@@ -362,3 +352,60 @@ export async function logoutAll(req  ,res){
     })
     } 
 
+
+
+//now we will create an otp that will verify the email using otp
+export async function verifyEmail(req,res){
+
+    const { otp , email}=req.body;
+   
+    const otpHash = crypto.createHash("sha256").update(otp).digest("hex");
+
+    const otpDoc = await otpModel.findOne({
+        email , 
+        otpHash
+    })
+
+    if(!otpDoc){
+        return res.status(400).json({
+            message : "Invalid otp"
+        })
+    }
+
+    if (otpDoc.expiresAt < new Date()) {
+    return res.status(400).json({
+        message: "OTP has expired"
+    });
+}
+
+    //since the otp is correct therefore we will verify the otp
+    const user= await userModel.findByIdAndUpdate( 
+      otpDoc.user,
+    { verified: true },
+    { new: true }  
+    )
+
+    //now delete the otps
+   await otpModel.deleteMany({
+    user:otpDoc.user
+   })
+
+   //now the user has been verfied
+   return res.status(200).json({
+    message : "Email verified successfully" ,
+    user:{
+        user:user.username,
+        email: user.email , 
+        verified: user.verified
+    }
+   })
+}
+
+
+//the entire flow is like this
+
+//the user registers and the otp is sent to him
+//no accesss token is generated till then
+//once the user verifies his email through otp 
+//then only he can login
+//once he logs in accesstoken and refreshtoken are generated and the user can access all the website's resources
